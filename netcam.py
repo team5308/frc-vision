@@ -42,7 +42,11 @@ class Server():
             if frame is not None:
                 small_frame = cv2.resize(frame, None, fx=.5, fy=.5, interpolation=cv2.INTER_AREA)#shrink the frame so we use less bandwidth
                 sendable_frame = cv2.imencode('.jpg', small_frame)[1].tostring()#econde the shrunken frame and convert it to a string
-                self.client.send(str(len(sendable_frame)).ljust(HEADER_LEN)+sendable_frame)#send the length of the image and the iamge to the client
+                try:
+                    self.client.send(str(len(sendable_frame)).ljust(HEADER_LEN)+sendable_frame)#send the length of the image and the iamge to the client
+                except socket.error:
+                    print "Connection closed by client."
+                    self.destroy()
 
     def run(self):
         """bundles all of the tasks needed to initialize and serve the video"""
@@ -82,6 +86,8 @@ class Client():
         return data
 
     def recv_loop(self):
+        cv2.namedWindow('CLIENT', cv2.WINDOW_NORMAL)#make our window resizeable
+        print "Press q to quit"
         while True:
             msg_len_str = self.sock.recv(HEADER_LEN)#get the length of the image data
             msg_len = 0
@@ -97,6 +103,7 @@ class Client():
                 cv2.imshow('CLIENT', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):#allow user to quit the client program
                 break
+        self.destroy()         
 
     def run(self):
         self.connect()
@@ -118,14 +125,12 @@ class Client():
         print "Bye."
         exit()
 
-def start_client(args):
-    print args
+def start_server(args):
     server = Server(port=args.port)#get a server instance
     signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
     server.run()
 
 def start_client(args):
-    print args
     client = Client(remote_host=args.addr, remote_port=args.port)
     signal.signal(signal.SIGINT, client.destroy)
     client.run()
@@ -134,13 +139,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="serves video from camera over the network")#create a command line argument parser
     subparsers = parser.add_subparsers()
 
-    server_parser = subparsers.add_parser('server',
-                                          title='server',
-                                          description='starts a netcam server')
+    server_parser = subparsers.add_parser('server')
     server_parser.set_defaults(func=start_server)#start server when server is chosen
-    client_parser = subparsers.add_parser('client',
-                                          title='client',
-                                          description='starts a netcam client')
+    client_parser = subparsers.add_parser('client')
     client_parser.add_argument('addr', action='store', type=str)#client needs to know the hostname/ip of the server
     client_parser.set_defaults(func=start_client)#start a client when they tell us to
     parser.add_argument('-p', '--port', action='store', dest='port', type=int, default=DEFAULT_PORT)#add option to set port
