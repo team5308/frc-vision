@@ -22,7 +22,8 @@ class Server():
     def create_and_bind_sock(self):
         """get a socket to serve from"""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #init socket
-        self.sock.bind((args.host, args.port)) #bind that socket
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) #forcibly bind socket
+        self.sock.bind((self.hostname, self.port)) #bind that socket
 
     def wait_for_connection(self):
         """wait for our one client to connect"""
@@ -49,17 +50,18 @@ class Server():
         self.wait_for_connection()
         self.serve_forever()
 
-    def interrupt_handler(self, signum, frame):
-        """handler for keyboard interrupts that allows us to gracefully exit
+    def destroy(self, signum=None, frame=None):#three args are provided to comply with signal.signal interrupt handler
+        """handler for keyboard interrupts or other events that 
+           indicate the server should exit. Allows us to gracefully exit
            rather than forcefully terminate with things like sockets still open"""
-        print "Keyboard Interrupt...closing sockets and exiting"
-        print self.client
+        print "Cleaning up..."
         if self.client is not None:
            self.client.close()
         if self.sock is not None:
            self.sock.close()
-        sys.exit(0)#quit with no errors
- 
+        print "Bye."
+        exit()
+
 class Client():
     def __init__(self, remote_host='localhost', remote_port=DEFAULT_PORT):
         self.remote_host = remote_host
@@ -81,10 +83,16 @@ class Client():
 
     def recv_loop(self):
         while True:
-            msg_len = int(self.sock.recv(HEADER_LEN))#get the length of the image data
+            msg_len_str = self.sock.recv(HEADER_LEN)#get the length of the image data
+            msg_len = 0
+            if not self.transmission_ended(msg_len_str):#check for EOT
+                msg_len = int(msg_len_str)
+            else:#if EOT, we outta here
+                print "Connection closed by server."
+                self.destroy()
             frame_data = self.recv_msg(self.sock, msg_len)#grab the frame
             frame_arr = np.fromstring(frame_data, np.uint8)#convert it to np array
-            frame = cv2.imdecode(frame_arr)#decode it into something we can display
+            frame = cv2.imdecode(frame_arr, cv2.CV_LOAD_IMAGE_COLOR)#decode it into something we can display
             if frame != None:#error checking
                 cv2.imshow('CLIENT', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):#allow user to quit the client program
@@ -94,28 +102,34 @@ class Client():
         self.connect()
         self.recv_loop()
 
-    def interrupt_handler(self, signum, frame):
-        """handler for keyboard interrupts that allows us to gracefully exit
-           rather than forcefully terminate with things like sockets still open"""
-        print "Keyboard Interrupt...closing sockets and exiting"
+    def transmission_ended(self, data):
+        """checks to see if there is empty data to handle appropriately"""
+        if len(data) > 0: 
+            return False
+        else: 
+            return True
+        
+    def destroy(self, signum=None, frame=None):
+        """see Server.destroy"""
+        print "Cleaning up..."
         if self.sock is not None:
            self.sock.close()
         cv2.destroyAllWindows()#only really needed for client 
-        sys.exit(0)#quit with no errors
-
+        print "Bye."
+        exit()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="serves video from camera over the network")#create a command line argument parser
     parser.add_argument('host_type', action='store', type=str, choices=['server', 'client'])#add option to pick server or client
-    parser.add_argument('-i', '--host', action='store', dest='host', type=str, default='localhost')#add option to set host
+    parser.add_argument('-r', '--remote-host', action='store', dest='remote_host', type=str, default='localhost')#add option to set host
     parser.add_argument('-p', '--port', action='store', dest='port', type=int, default=DEFAULT_PORT)#add option to set port
     args = parser.parse_args()#parse the args fromt he command line
 
     if args.host_type == 'server':
         server = Server(port=args.port)#get a server instance
-        signal.signal(signal.SIGINT, server.interrupt_handler)#start the interrupt handler
+        signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
         server.start()
     if args.host_type == 'client':
-        client = Client(remote_host=args.host, remote_port=args.port)
-        signal.signal(signal.SIGINT, client.interrupt_handler)
+        client = Client(remote_host=args.remote_host, remote_port=args.port)
+        signal.signal(signal.SIGINT, client.destroy)
         client.start()
