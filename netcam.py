@@ -70,6 +70,12 @@ class Client():
     def __init__(self, remote_host='localhost', remote_port=DEFAULT_PORT):
         self.remote_host = remote_host
         self.remote_port = remote_port
+        #handle different versions of opencv
+        if '3.2' in cv2.__version__:
+            self.IMREAD_COLOR = cv2.IMREAD_COLOR
+        else:
+            self.IMREAD_COLOR = cv2.CV_LOAD_IMAGE_COLOR
+           
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #grab a socket
@@ -98,7 +104,7 @@ class Client():
                 self.destroy()
             frame_data = self.recv_msg(self.sock, msg_len)#grab the frame
             frame_arr = np.fromstring(frame_data, np.uint8)#convert it to np array
-            frame = cv2.imdecode(frame_arr, cv2.CV_LOAD_IMAGE_COLOR)#decode it into something we can display
+            frame = cv2.imdecode(frame_arr, self.IMREAD_COLOR)#decode it into something we can display
             if frame != None:#error checking
                 cv2.imshow('CLIENT', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):#allow user to quit the client program
@@ -126,7 +132,7 @@ class Client():
         exit()
 
 def start_server(args):
-    server = Server(port=args.port)#get a server instance
+    server = Server(hostname=args.addr, port=args.port)#get a server instance
     signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
     server.run()
 
@@ -140,6 +146,7 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers()
 
     server_parser = subparsers.add_parser('server')
+    server_parser.add_argument('addr', action='store', type=str)
     server_parser.set_defaults(func=start_server)#start server when server is chosen
     client_parser = subparsers.add_parser('client')
     client_parser.add_argument('addr', action='store', type=str)#client needs to know the hostname/ip of the server
