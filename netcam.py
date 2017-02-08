@@ -118,18 +118,31 @@ class Client():
         print "Bye."
         exit()
 
+def start_client(args):
+    print args
+    server = Server(port=args.port)#get a server instance
+    signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
+    server.run()
+
+def start_client(args):
+    print args
+    client = Client(remote_host=args.addr, remote_port=args.port)
+    signal.signal(signal.SIGINT, client.destroy)
+    client.run()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="serves video from camera over the network")#create a command line argument parser
-    parser.add_argument('host_type', action='store', type=str, choices=['server', 'client'])#add option to pick server or client
-    parser.add_argument('-r', '--remote-host', action='store', dest='remote_host', type=str, default='localhost')#add option to set host
-    parser.add_argument('-p', '--port', action='store', dest='port', type=int, default=DEFAULT_PORT)#add option to set port
-    args = parser.parse_args()#parse the args fromt he command line
+    subparsers = parser.add_subparsers()
 
-    if args.host_type == 'server':
-        server = Server(port=args.port)#get a server instance
-        signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
-        server.run()
-    if args.host_type == 'client':
-        client = Client(remote_host=args.remote_host, remote_port=args.port)
-        signal.signal(signal.SIGINT, client.destroy)
-        client.run()
+    server_parser = subparsers.add_parser('server',
+                                          title='server',
+                                          description='starts a netcam server')
+    server_parser.set_defaults(func=start_server)#start server when server is chosen
+    client_parser = subparsers.add_parser('client',
+                                          title='client',
+                                          description='starts a netcam client')
+    client_parser.add_argument('addr', action='store', type=str)#client needs to know the hostname/ip of the server
+    client_parser.set_defaults(func=start_client)#start a client when they tell us to
+    parser.add_argument('-p', '--port', action='store', dest='port', type=int, default=DEFAULT_PORT)#add option to set port
+    args = parser.parse_args()#parse the args fromt the command line
+    args.func(args)#actually start the client/server
