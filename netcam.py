@@ -44,7 +44,7 @@ class Server():
                 sendable_frame = cv2.imencode('.jpg', small_frame)[1].tostring()#econde the shrunken frame and convert it to a string
                 self.client.send(str(len(sendable_frame)).ljust(HEADER_LEN)+sendable_frame)#send the length of the image and the iamge to the client
 
-    def start(self):
+    def run(self):
         """bundles all of the tasks needed to initialize and serve the video"""
         self.create_and_bind_sock()
         self.wait_for_connection()
@@ -98,7 +98,7 @@ class Client():
             if cv2.waitKey(1) & 0xFF == ord('q'):#allow user to quit the client program
                 break
 
-    def start(self):
+    def run(self):
         self.connect()
         self.recv_loop()
 
@@ -128,8 +128,8 @@ if __name__ == '__main__':
     if args.host_type == 'server':
         server = Server(port=args.port)#get a server instance
         signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
-        server.start()
+        server.run()
     if args.host_type == 'client':
         client = Client(remote_host=args.remote_host, remote_port=args.port)
         signal.signal(signal.SIGINT, client.destroy)
-        client.start()
+        client.run()
