@@ -74,7 +74,7 @@ class Client():
         self.remote_host = remote_host
         self.remote_port = remote_port
         #handle different versions of opencv
-        if '3.2' in cv2.__version__:
+        if '3.1' in cv2.__version__:
             self.IMREAD_COLOR = cv2.IMREAD_COLOR
         else:
             self.IMREAD_COLOR = cv2.CV_LOAD_IMAGE_COLOR
