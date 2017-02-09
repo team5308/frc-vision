@@ -10,15 +10,6 @@ RECV_SIZE = 691200
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect((HOST, PORT))
 
-def is_int(msg):
-    """Takes a message and returns whether or not the message is an int"""
-    try:
-        conv = int(msg)
-        return True
-    except:
-        return False
-
-
 def recv_msg(sock, count):
     data = b''
     while len(data) < count:
