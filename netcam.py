@@ -29,7 +29,7 @@ class Server():
     def wait_for_connection(self):
         """wait for our one client to connect"""
         self.sock.listen(1) #we only want 1 connection
-        print "Listening on %s:%d. Waiting for client to connect..." % (socket.gethostname(), args.port)#output our current server scheme
+        print "Listening on %s:%d. Waiting for client to connect..." % (self.hostname, self.port)#output our current server scheme
         #since we only want one connection it is ok to block until they connect
         (self.client, self.client_addr) = self.sock.accept()
         print "Received connection from %s" % (self.client_addr[0])#show where the connection is coming from
@@ -149,11 +149,13 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers()
 
     server_parser = subparsers.add_parser('server')
-    server_parser.add_argument('addr', action='store', type=str)
     server_parser.set_defaults(func=start_server)#start server when server is chosen
     client_parser = subparsers.add_parser('client')
-    client_parser.add_argument('addr', action='store', type=str)#client needs to know the hostname/ip of the server
     client_parser.set_defaults(func=start_client)#start a client when they tell us to
+    """Note: connection only works over exact host bound,
+       i.e. running netcam server localhost and then trying to
+       netcam client 127.0.0.1 will likely fail"""
+    parser.add_argument('addr', action='store', type=str)#we need to know what host to bind. 
     parser.add_argument('-p', '--port', action='store', dest='port', type=int, default=DEFAULT_PORT)#add option to set port
     args = parser.parse_args()#parse the args fromt the command line
     args.func(args)#actually start the client/server
