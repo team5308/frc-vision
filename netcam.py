@@ -7,7 +7,7 @@ import argparse
 import signal
 import sys
 DEFAULT_PORT = 3000 #port to connect over
-CAM_PORT = 0#default camera to use capture
+CAM_PORT = 1#default camera to use capture
 FPS = 24 #frames per second
 HEADER_LEN = 16 #longest possible length of encoded string
 
@@ -18,6 +18,7 @@ class Server():
         self.port  = port
         self.sock = None
         self.client = None
+	self.capture = None
 
     def create_and_bind_sock(self):
         """get a socket to serve from"""
@@ -35,10 +36,10 @@ class Server():
 
     def serve_forever(self):
         """get a capture object and server until we get an interrupt"""
-        capture = cv2.VideoCapture(CAM_PORT) #get an object so we can grab some frames
+        self.capture = cv2.VideoCapture(CAM_PORT) #get an object so we can grab some frames
         while True: #infinite loops are good for servers
             sleep(1.0/FPS)#control framerate
-            ret, frame = capture.read()#get a frame from the camera
+            ret, frame = self.capture.read()#get a frame from the camera
             if frame is not None:
                 small_frame = cv2.resize(frame, None, fx=.5, fy=.5, interpolation=cv2.INTER_AREA)#shrink the frame so we use less bandwidth
                 sendable_frame = cv2.imencode('.jpg', small_frame)[1].tostring()#econde the shrunken frame and convert it to a string
@@ -63,6 +64,8 @@ class Server():
            self.client.close()
         if self.sock is not None:
            self.sock.close()
+	if self.capture is not None:
+	   self.capture.release()
         print "Bye."
         exit()
 
