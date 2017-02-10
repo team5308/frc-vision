@@ -6,10 +6,16 @@ from time import sleep
 import argparse
 import signal
 import sys
+from distutils.version import StrictVersion 
 DEFAULT_PORT = 3000 #port to connect over
 CAM_PORT = 1#default camera to use capture
 FPS = 24 #frames per second
 HEADER_LEN = 16 #longest possible length of encoded string
+LIFECAM_BRIGHTNESS = -2.5 #brightness setting for Microsoft LifeCam HD3000
+
+def cam_attr_const(simple_name):
+    ocv3 = StrictVersion(cv2.__version__) >= StrictVersion('3.0.0') #are we using opencv3 or 2
+    return getattr(cv2 if ocv3 else cv2.cv, ("" if ocv3 else "CV_") + "CAP_PROP" + simple_name)
 
 class Server():
     """Netcam server class. Provides functionality for serving webcam video over network"""
@@ -38,6 +44,7 @@ class Server():
     def serve_forever(self):
         """get a capture object and server until we get an interrupt"""
         self.capture = cv2.VideoCapture(self.cam_num) #get an object so we can grab some frames
+        self.capture.set(cam_attr_const("BRIGHTNESS"), LIFECAM_BRIGHTNESS)
         while True: #infinite loops are good for servers
             sleep(1.0/FPS)#control framerate
             ret, frame = self.capture.read()#get a frame from the camera
@@ -75,7 +82,8 @@ class Client():
         self.remote_host = remote_host
         self.remote_port = remote_port
         #handle different versions of opencv
-        if '3.1' in cv2.__version__:
+        ocv3 = StrictVersion(cv2.__version__) >= StrictVersion('3.0.0') #are we using opencv3 or 2
+        if ocv3:
             self.IMREAD_COLOR = cv2.IMREAD_COLOR
         else:
             self.IMREAD_COLOR = cv2.CV_LOAD_IMAGE_COLOR
