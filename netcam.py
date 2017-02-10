@@ -13,12 +13,13 @@ HEADER_LEN = 16 #longest possible length of encoded string
 
 class Server():
     """Netcam server class. Provides functionality for serving webcam video over network"""
-    def __init__(self, hostname='localhost', port=DEFAULT_PORT):
+    def __init__(self, hostname='localhost', port=DEFAULT_PORT, cam_num=CAM_PORT):
         self.hostname = hostname
         self.port  = port
+        self.cam_num = cam_num
         self.sock = None
         self.client = None
-	self.capture = None
+        self.capture = None
 
     def create_and_bind_sock(self):
         """get a socket to serve from"""
@@ -36,7 +37,7 @@ class Server():
 
     def serve_forever(self):
         """get a capture object and server until we get an interrupt"""
-        self.capture = cv2.VideoCapture(CAM_PORT) #get an object so we can grab some frames
+        self.capture = cv2.VideoCapture(self.cam_num) #get an object so we can grab some frames
         while True: #infinite loops are good for servers
             sleep(1.0/FPS)#control framerate
             ret, frame = self.capture.read()#get a frame from the camera
@@ -78,7 +79,6 @@ class Client():
             self.IMREAD_COLOR = cv2.IMREAD_COLOR
         else:
             self.IMREAD_COLOR = cv2.CV_LOAD_IMAGE_COLOR
-           
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #grab a socket
@@ -108,7 +108,7 @@ class Client():
             frame_data = self.recv_msg(self.sock, msg_len)#grab the frame
             frame_arr = np.fromstring(frame_data, np.uint8)#convert it to np array
             frame = cv2.imdecode(frame_arr, self.IMREAD_COLOR)#decode it into something we can display
-            if frame != None:#error checking
+            if frame is not None:#error checking
                 cv2.imshow('CLIENT', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):#allow user to quit the client program
                 break
@@ -135,7 +135,7 @@ class Client():
         exit()
 
 def start_server(args):
-    server = Server(hostname=args.addr, port=args.port)#get a server instance
+    server = Server(hostname=args.addr, port=args.port, cam_num=args.cam_num)#get a server instance
     signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
     server.run()
 
@@ -149,6 +149,7 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers()
 
     server_parser = subparsers.add_parser('server')
+    server_parser.add_argument('-c', '--cam-num', action='store', dest='cam_num', type=int, default=CAM_PORT)
     server_parser.set_defaults(func=start_server)#start server when server is chosen
     client_parser = subparsers.add_parser('client')
     client_parser.set_defaults(func=start_client)#start a client when they tell us to
