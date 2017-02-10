@@ -15,7 +15,7 @@ LIFECAM_BRIGHTNESS = -2.5 #brightness setting for Microsoft LifeCam HD3000
 
 def cam_attr_const(simple_name):
     ocv3 = StrictVersion(cv2.__version__) >= StrictVersion('3.0.0') #are we using opencv3 or 2
-    return getattr(cv2 if ocv3 else cv2.cv, ("" if ocv3 else "CV_") + "CAP_PROP" + simple_name)
+    return getattr(cv2 if ocv3 else cv2.cv, ("" if ocv3 else "CV_") + "CAP_PROP_" + simple_name)
 
 class Server():
     """Netcam server class. Provides functionality for serving webcam video over network"""
@@ -45,6 +45,7 @@ class Server():
         """get a capture object and server until we get an interrupt"""
         self.capture = cv2.VideoCapture(self.cam_num) #get an object so we can grab some frames
         self.capture.set(cam_attr_const("BRIGHTNESS"), LIFECAM_BRIGHTNESS)
+        self.capture.set(cam_attr_const("EXPOSURE"), -10)
         while True: #infinite loops are good for servers
             sleep(1.0/FPS)#control framerate
             ret, frame = self.capture.read()#get a frame from the camera
