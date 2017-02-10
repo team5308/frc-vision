@@ -123,7 +123,7 @@ class Client():
                 cv2.imshow('CLIENT', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):#allow user to quit the client program
                 break
-            if cv2.waitKey(1) & 0xFF = ord('s'):
+            if cv2.waitKey(1) & 0xFF == ord('s'):
                 cv2.imwrite('savefile.jpg', frame)
         self.destroy()         
 
