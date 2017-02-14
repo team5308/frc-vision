@@ -6,6 +6,7 @@ from time import sleep
 import argparse
 import signal
 import sys
+import analyzer
 from distutils.version import StrictVersion 
 DEFAULT_PORT = 3000 #port to connect over
 CAM_PORT = 1#default camera to use capture
@@ -16,10 +17,6 @@ HEADER_LEN = 16 #longest possible length of encoded string
 #command to properly adjust brightness run on tx1#
 #v4l2-ctl -c exposure_auto=1 exposure_absolute=10#
 ##################################################
-
-def cv_const(simple_name):
-    ocv3 = StrictVersion(cv2.__version__) >= StrictVersion('3.0.0') #are we using opencv3 or 2
-    return getattr(cv2 if ocv3 else cv2.cv, ("" if ocv3 else "CV_") + simple_name)
 
 class Server():
     """Netcam server class. Provides functionality for serving webcam video over network"""
@@ -52,7 +49,7 @@ class Server():
             sleep(1.0/FPS)#control framerate
             ret, frame = self.capture.read()#get a frame from the camera
             if frame is not None:
-                small_frame = cv2.resize(self.analyze(frame), None, fx=.5, fy=.5, interpolation=cv2.INTER_AREA)#shrink the frame so we use less bandwidth
+                small_frame = cv2.resize(analyzer.analyze(frame), None, fx=.5, fy=.5, interpolation=cv2.INTER_AREA)#shrink the frame so we use less bandwidth
                 sendable_frame = cv2.imencode('.jpg', small_frame)[1].tostring()#econde the shrunken frame and convert it to a string
                 try:
                     self.client.send(str(len(sendable_frame)).ljust(HEADER_LEN)+sendable_frame)#send the length of the image and the iamge to the client
@@ -65,32 +62,6 @@ class Server():
         self.create_and_bind_sock()
         self.wait_for_connection()
         self.serve_forever()
-
-    def analyze(self, frame):
-        """returns analyzed frame with bounding box drawn around reflective tape"""
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower_tape_thresh = np.array([89, 39, 216])
-        upper_tape_thresh = np.array([130, 253, 255])
-
-        thresh_frame = cv2.inRange(hsv, lower_tape_thresh, upper_tape_thresh)
-        contours, hierarchy = cv2.findContours(thresh_frame, cv_const("RETR_EXTERNAL"), cv_const("CHAIN_APPROX_NONE"))
-        contours = np.array(contours)
-        if len(contours) > 0:
-            max_area_contour = self.filter_contours(contours)
-            rect = cv2.minAreaRect(max_area_contour)
-            box = cv2.cv.BoxPoints(rect)
-            box = np.int0(box)
-            cv2.drawContours(frame, [box], 0, (0, 0, 255), 3)
-        return frame
-
-    def filter_contours(self, contours):
-        #vectorized_cnt_area = np.vectorize(cv2.contourArea)
-        #contour_areas = vectorized_cnt_area(contours)
-        contour_areas = []
-        for cnt in contours:
-            contour_areas.append(cv2.contourArea(cnt))
-        return contours[np.argmax(contour_areas)]
-        
 
     def destroy(self, signum=None, frame=None):#three args are provided to comply with signal.signal interrupt handler
         """handler for keyboard interrupts or other events that 
