@@ -20,7 +20,7 @@ def analyze(frame):
     thresh_frame = cv2.inRange(hsv, lower_tape_thresh, upper_tape_thresh)
     contours = cv2.findContours(thresh_frame, cv_const("RETR_EXTERNAL"), cv_const("CHAIN_APPROX_NONE"))[1]
     contours = np.array(contours)
-    if len(contours) > 0:
+    if contours is not None:
         max_area_contour = filter_contours(contours)
         rect = cv2.minAreaRect(max_area_contour)
         rect_width_px = rect[0][0] - rect [1][0]
@@ -29,8 +29,12 @@ def analyze(frame):
             box = cv2.boxPoints(rect)
         else:
             box = cv2.cv.BoxPoints(rect)
-        box = np.int0(box)
-        cv2.drawContours(frame, [box], 0, (0, 0, 255), 3)
+#            if not hasattr(cv2, 'cv'):
+#                box = cv2.boxPoints(rect)
+#            else:
+#                box = cv2.cv.BoxPoints(rect)
+            box = np.int0(box)
+            cv2.drawContours(frame, [box], 0, (0, 0, 255), 3)
     return frame
 
 def filter_contours(contours):
@@ -39,10 +43,13 @@ def filter_contours(contours):
        to find the contour with the maximum area"""
     #vectorized_cnt_area = np.vectorize(cv2.contourArea)
     #contour_areas = vectorized_cnt_area(contours)
-    contour_areas = []
-    for cnt in contours:
-        contour_areas.append(cv2.contourArea(cnt))
-    return contours[np.argmax(contour_areas)]
+    try:
+        contour_areas = []
+        for cnt in contours:
+            contour_areas.append(cv2.contourArea(cnt))
+        return contours[np.argmax(contour_areas)]
+    except:
+        return None
 
 def distance_to_marker(width_actual, width_px): #i forget how i got this formula, should probably figure it out
     return FOCAL_LENGTH * width_actual / width_px

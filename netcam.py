@@ -13,10 +13,10 @@ CAM_PORT = 0#default camera to use capture
 FPS = 24 #frames per second
 HEADER_LEN = 16 #longest possible length of encoded string
 
-##################################################
-#command to properly adjust brightness run on tx1#
-#v4l2-ctl -c exposure_auto=1 exposure_absolute=10#
-##################################################
+#####################################################
+# command to properly adjust brightness run on tx1  #
+#v4l2-ctl -c exposure_auto=1 -c exposure_absolute=10#
+#####################################################
 
 class Server():
     """Netcam server class. Provides functionality for serving webcam video over network"""
