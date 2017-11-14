@@ -9,7 +9,7 @@ import sys
 import analyzer
 from distutils.version import StrictVersion 
 DEFAULT_PORT = 3000 #port to connect over
-CAM_PORT = 1#default camera to use capture
+CAM_PORT = 0#default camera to use capture
 FPS = 24 #frames per second
 HEADER_LEN = 16 #longest possible length of encoded string
 
@@ -52,7 +52,7 @@ class Server():
                 small_frame = cv2.resize(analyzer.analyze(frame), None, fx=.5, fy=.5, interpolation=cv2.INTER_AREA)#shrink the frame so we use less bandwidth
                 sendable_frame = cv2.imencode('.jpg', small_frame)[1].tostring()#econde the shrunken frame and convert it to a string
                 try:
-                    self.client.send(str(len(sendable_frame)).ljust(HEADER_LEN)+sendable_frame)#send the length of the image and the iamge to the client
+                    self.client.send(str(len(sendable_frame)).ljust(HEADER_LEN)+sendable_frame)#send the length of the image and the image to the client
                 except socket.error:
                     print "Connection closed by client."
                     self.destroy()

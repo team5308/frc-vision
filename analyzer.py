@@ -24,7 +24,7 @@ def analyze(frame):
         max_area_contour = filter_contours(contours)
         rect = cv2.minAreaRect(max_area_contour)
         rect_width_px = rect[0][0] - rect [1][0]
-        print "distance to tape: %f" % (distance_to_marker(TAPE_WIDTH_ACTUAL, rect_width_px))
+        #print "distance to tape: %f" % (distance_to_marker(TAPE_WIDTH_ACTUAL, rect_width_px))
         if not hasattr(cv2, 'cv'):
             box = cv2.boxPoints(rect)
         else:
