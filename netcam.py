@@ -12,7 +12,7 @@ import cPickle
 import Queue
 from threading import Thread
 DEFAULT_PORT = 3000 #port to connect over
-CAM_NUMS = [0,1]#default camera to use capture
+CAM_NUMS = [1]#default camera to use capture
 FPS = 24 #frames per second
 HEADER_LEN = 16 #longest possible length of encoded string
 
@@ -30,13 +30,14 @@ class Server():
         self.sock = None
         self.client = None
         self.captures = []
-        self.frame_queue = Queue.Queue()
+        self.frame_queue = Queue.Queue(FPS)#maxlen of Q, don't get more than 1 second behind
 
     def create_and_bind_sock(self):
-        """get a socket to serve from"""
+        """get a socket to serve from, and star the network thread"""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #init socket
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) #forcibly bind socket
         self.sock.bind((self.hostname, self.port)) #bind that socket
+        self.start_network_thread()#starts a new thread that handles sending data to client
 
     def wait_for_connection(self):
         """wait for our one client to connect"""
@@ -55,10 +56,11 @@ class Server():
             pickled_frame = cPickle.dumps(frame_to_send)
             frame_header = str(len(pickled_frame)).ljust(HEADER_LEN)#padded length of message
             try:
-                self.client.sendall(frame_header+pickled_frame)
+                self.client.send(frame_header+pickled_frame)
             except socket.error:
                 print "Connection closed by client."
                 self.destroy()
+            self.frame_queue.task_done()
 
     def start_network_thread(self):
         """starts up the thread that runs network_worker"""
@@ -87,7 +89,7 @@ class Server():
         for frame in frames:
             if frame is not None:
                 #analyze the frame, then shrink it so we use less bandwidth
-                small_frame = cv2.resize(analyzer.analyze(frame), 
+                small_frame = cv2.resize(frame, #analyzer.analyze(frame), 
                                          (640, 360),
                                          interpolation=cv2.INTER_AREA)
                 processed_frames.append(small_frame)
@@ -95,15 +97,32 @@ class Server():
             return np.concatenate(processed_frames, axis=1)
         return processed_frames[0]
 
+    def queue_frame(self, frame):
+        try: 
+            self.frame_queue.put_nowait(frame)#queue the processed frame to be sent to the client
+        except Queue.Full:
+            pass
+            #with self.frame_queue.mutex:
+                #self.frame_queue.queue.clear()
+    
+    def send_frame(self, frame_to_send):
+        pickled_frame = cPickle.dumps(frame_to_send)
+        frame_header = str(len(pickled_frame)).ljust(HEADER_LEN)#padded length of message
+        try:
+            self.client.sendall(frame_header+pickled_frame)
+        except socket.error:
+            print "Connection closed by client."
+            self.destroy()
+
     def serve_forever(self):
         """get a capture object and server until we get an interrupt"""
         self.start_captures()#loop through self.cam_nums and init capture objects for all those cams
-        self.start_network_thread()#starts a new thread that handles sending data to client
         while True: #infinite loops are good for servers
             sleep(1.0/FPS)#control framerate
             frames = self.get_raw_frames()#grab all of the raw frames from the capture objects
             processed_frame = self.process_frames(frames)#do CV processing, put frames together in single frame
-            self.frame_queue.put(processed_frame)#queue the processed frame to be sent to the client
+            #self.queue_frame(processed_frame)
+            self.send_frame(processed_frame)
 
     def run(self):
         """bundles all of the tasks needed to initialize and serve the video"""
