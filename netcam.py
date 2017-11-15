@@ -8,8 +8,11 @@ import signal
 import sys
 import analyzer
 from distutils.version import StrictVersion 
+import cPickle
+import Queue
+from threading import Thread
 DEFAULT_PORT = 3000 #port to connect over
-CAM_PORT = 1#default camera to use capture
+CAM_NUMS = [0,1]#default camera to use capture
 FPS = 24 #frames per second
 HEADER_LEN = 16 #longest possible length of encoded string
 
@@ -20,13 +23,14 @@ HEADER_LEN = 16 #longest possible length of encoded string
 
 class Server():
     """Netcam server class. Provides functionality for serving webcam video over network"""
-    def __init__(self, hostname='localhost', port=DEFAULT_PORT, cam_num=CAM_PORT):
+    def __init__(self, hostname='localhost', port=DEFAULT_PORT, cam_nums=CAM_NUMS):
         self.hostname = hostname
         self.port  = port
-        self.cam_num = cam_num
+        self.cam_nums = cam_nums
         self.sock = None
         self.client = None
-        self.capture = None
+        self.captures = []
+        self.frame_queue = Queue.Queue()
 
     def create_and_bind_sock(self):
         """get a socket to serve from"""
@@ -42,20 +46,64 @@ class Server():
         (self.client, self.client_addr) = self.sock.accept()
         print "Received connection from %s" % (self.client_addr[0])#show where the connection is coming from
 
+    def network_worker(self):
+        """Logic for worker thread that takes items out of frame_queue and sends them over
+        socket to the client"""
+        print "Network worker running..."
+        while True:
+            frame_to_send = self.frame_queue.get()#this will block until an a frame is available
+            pickled_frame = cPickle.dumps(frame_to_send)
+            frame_header = str(len(pickled_frame)).ljust(HEADER_LEN)#padded length of message
+            try:
+                self.client.sendall(frame_header+pickled_frame)
+            except socket.error:
+                print "Connection closed by client."
+                self.destroy()
+
+    def start_network_thread(self):
+        """starts up the thread that runs network_worker"""
+        t = Thread(target=self.network_worker)
+        t.daemon = True
+        t.start()
+        
+    def start_captures(self):
+        """start all of the video capture objects and store references to them in an instance variable"""
+        for num in self.cam_nums:
+            self.captures.append(cv2.VideoCapture(num))#append the VideoCapture to our list of captures
+    
+    def get_raw_frames(self):
+        """pull a frame from all capture objects and return a list of the captured frames"""
+        frames = []
+
+        for capture in self.captures:
+            ret, frame = capture.read()#get a frame from the camera
+            frames.append(frame)
+
+        return frames
+
+    def process_frames(self, frames):
+        """analyze all of the frames in frames and pack them into a single image to send over network"""
+        processed_frames = []
+        for frame in frames:
+            if frame is not None:
+                #analyze the frame, then shrink it so we use less bandwidth
+                small_frame = cv2.resize(analyzer.analyze(frame), 
+                                         (640, 360),
+                                         interpolation=cv2.INTER_AREA)
+                processed_frames.append(small_frame)
+        if len(processed_frames) > 1:
+            return np.concatenate(processed_frames, axis=1)
+        return processed_frames[0]
+
     def serve_forever(self):
         """get a capture object and server until we get an interrupt"""
-        self.capture = cv2.VideoCapture(self.cam_num) #get an object so we can grab some frames
+        self.start_captures()#loop through self.cam_nums and init capture objects for all those cams
+        self.start_network_thread()#starts a new thread that handles sending data to client
         while True: #infinite loops are good for servers
             sleep(1.0/FPS)#control framerate
-            ret, frame = self.capture.read()#get a frame from the camera
-            if frame is not None:
-                small_frame = cv2.resize(analyzer.analyze(frame), None, fx=.5, fy=.5, interpolation=cv2.INTER_AREA)#shrink the frame so we use less bandwidth
-                sendable_frame = cv2.imencode('.jpg', small_frame)[1].tostring()#econde the shrunken frame and convert it to a string
-                try:
-                    self.client.send(str(len(sendable_frame)).ljust(HEADER_LEN)+sendable_frame)#send the length of the image and the iamge to the client
-                except socket.error:
-                    print "Connection closed by client."
-                    self.destroy()
+            frames = self.get_raw_frames()#grab all of the raw frames from the capture objects
+            processed_frame = self.process_frames(frames)#do CV processing, put frames together in single frame
+            self.frame_queue.put(processed_frame)#queue the processed frame to be sent to the client
 
     def run(self):
         """bundles all of the tasks needed to initialize and serve the video"""
@@ -72,8 +120,9 @@ class Server():
            self.client.close()
         if self.sock is not None:
            self.sock.close()
-	if self.capture is not None:
-	   self.capture.release()
+        for capture in self.captures:
+            if capture is not None:
+                capture.release()
         print "Bye."
         exit()
 
@@ -114,8 +163,8 @@ class Client():
                 print "Connection closed by server."
                 self.destroy()
             frame_data = self.recv_msg(self.sock, msg_len)#grab the frame
-            frame_arr = np.fromstring(frame_data, np.uint8)#convert it to np array
-            frame = cv2.imdecode(frame_arr, self.IMREAD_COLOR)#decode it into something we can display
+            frame = cPickle.loads(frame_data)#np.fromstring(frame_data, np.uint8)#convert it to np array
+            #frame = cv2.imdecode(frame_arr, self.IMREAD_COLOR)#decode it into something we can display
             if frame is not None:#error checking
                 cv2.imshow('CLIENT', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):#allow user to quit the client program
@@ -134,7 +183,6 @@ class Client():
             return False
         else: 
             return True
-        
 
     def destroy(self, signum=None, frame=None):
         """see Server.destroy"""
@@ -146,7 +194,7 @@ class Client():
         exit()
 
 def start_server(args):
-    server = Server(hostname=args.addr, port=args.port, cam_num=args.cam_num)#get a server instance
+    server = Server(hostname=args.addr, port=args.port, cam_nums=args.cam_nums)#get a server instance
     signal.signal(signal.SIGINT, server.destroy)#start the interrupt handler
     server.run()
 
@@ -160,7 +208,7 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers()
 
     server_parser = subparsers.add_parser('server')
-    server_parser.add_argument('-c', '--cam-num', action='store', dest='cam_num', type=int, default=CAM_PORT)
+    server_parser.add_argument('-c', '--cam-num', action='store', dest='cam_nums', type=int, default=CAM_NUMS)
     server_parser.set_defaults(func=start_server)#start server when server is chosen
     client_parser = subparsers.add_parser('client')
     client_parser.set_defaults(func=start_client)#start a client when they tell us to
