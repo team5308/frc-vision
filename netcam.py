@@ -1,19 +1,15 @@
 #!/usr/bin/python
-import socket 
 import cv2 #version 2.4
 import numpy as np
 from time import sleep
 import argparse
-import signal
-import sys
 import analyzer
 from distutils.version import StrictVersion 
-import cPickle
 import Queue
 from threading import Thread
 import flask
 DEFAULT_PORT = 3000 #port to connect over
-CAM_NUMS = [0]#default camera to use capture
+CAM_NUMS = [0, 1]#default camera to use capture
 FPS = 24 #frames per second
 
 ##################################################
@@ -47,7 +43,7 @@ def process_frames(frames):
     for frame in frames:
         if frame is not None:
             #analyze the frame, then shrink it so we use less bandwidth
-            small_frame = cv2.resize(frame, #analyzer.analyze(frame), 
+            small_frame = cv2.resize(analyzer.analyze(frame), 
                                      (320, 180),
                                      interpolation=cv2.INTER_AREA)
             processed_frames.append(small_frame)
