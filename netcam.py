@@ -12,10 +12,10 @@ DEFAULT_PORT = 3000 #port to connect over
 CAM_NUMS = [0, 1]#default camera to use capture
 FPS = 24 #frames per second
 
-##################################################
-#command to properly adjust brightness run on tx1#
-#v4l2-ctl -c exposure_auto=1 exposure_absolute=10#
-##################################################
+#####################################################
+# command to properly adjust brightness run on tx1  #
+#v4l2-ctl -c exposure_auto=1 -c exposure_absolute=10#
+#####################################################
 
 frame_q = Queue.Queue(FPS)
 captures = []
