@@ -65,16 +65,13 @@ def queue_frame(frame, q):
     except Queue.Full:
         pass
 
-def capture_forever():
+def capture_forever(captures):
     """get a capture object and serve until we get an interrupt"""
     while True: #infinite loops are good for servers
-        try:
-            #sleep(1.0/FPS)#control framerate
-            frames = get_raw_frames(captures)#grab all of the raw frames from the capture objects
-            processed_frame = process_frames(frames)#do CV processing, put frames together in single frame
-            queue_frame(processed_frame, frame_q)#queue the frame for MJPG stream
-        except IndexError:#lazy error handling for else case in process_frames
-            pass
+        #sleep(1.0/FPS)#control framerate
+        frames = get_raw_frames(captures)#grab all of the raw frames from the capture objects
+        processed_frame = process_frames(frames)#do CV processing, put frames together in single frame
+        queue_frame(processed_frame, frame_q)#queue the frame for MJPG stream
 
 app = flask.Flask(__name__)#create Flask app
 
@@ -85,7 +82,7 @@ def mjpg_gen():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-@app.route('/feed') 
+@app.route('/') 
 def mjpg_feed():
     """route for MJPG feed"""
     return flask.Response(mjpg_gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -93,15 +90,19 @@ def mjpg_feed():
 def start_cap_thread(cam_nums):
     """Init and start the capture thread"""
     captures = start_captures(cam_nums)
-    cap_thread = Thread(target=capture_forever)
+    cap_thread = Thread(target=capture_forever, args=(captures,))
     cap_thread.daemon = True
     cap_thread.start()
 
 if __name__ == '__main__':
+    #set up command line argument parser and parse the command line options that have been passed
     parser = argparse.ArgumentParser(description='Vision server for FRC team 5835.')
-    parser.add_argument('bind_address', action='store', type=str, nargs='?', default=DEFAULT_HOST)
-    parser.add_argument('bind_port', action='store', type=str, nargs='?', default=DEFAULT_PORT)
-#    args = parser.parse_args()
-    start_cap_thread(CAM_NUMS)
-    #app.run(host=args.bind_address, port=args.bind_port) #run the flask app to start the server
-    app.run(host='localhost')
+    #can't use -h because it overlaps with help
+    parser.add_argument('-a', '--bind-address', action='store', type=str, dest='host', default=DEFAULT_HOST)
+    parser.add_argument('-p', '--bind-port', action='store', dest='port', type=str, default=DEFAULT_PORT)
+    parser.add_argument('-c', '--cam_nums', action='store', dest='cam_nums', type=int, nargs='+', 
+                        default=CAM_NUMS)
+    args = parser.parse_args()
+
+    start_cap_thread(args.cam_nums) 
+    app.run(host=args.host, port=args.port) #run the flask app to start the server
